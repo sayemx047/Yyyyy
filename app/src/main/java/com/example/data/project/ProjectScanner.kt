@@ -68,15 +68,8 @@ class ProjectScanner(private val context: Context) {
         files: List<DocumentFileWrapper>
     ): ProjectInfo {
         var hasSettingsGradle = false
-        var hasSettingsGradleKts = false
-        var hasAppBuildGradle = false
-        var hasAppBuildGradleKts = false
-        var hasDotEnv = false
-        var hasDotEnvExample = false
         var hasBuildGradle = false
         var hasGradlew = false
-        var hasWrapperJar = false
-        var hasWrapperProps = false
         var hasAndroidManifest = false
         var gradleDslType = "Kotlin DSL (.kts)"
         var compileSdk = "35"
@@ -90,7 +83,7 @@ class ProjectScanner(private val context: Context) {
         var totalSize = 0L
 
         for (wrapper in files) {
-            val relPath = wrapper.relativePath.replace("\\", "/")
+            val relPath = wrapper.relativePath
             val fileName = wrapper.name
 
             if (isIgnored(relPath, fileName)) continue
@@ -98,15 +91,8 @@ class ProjectScanner(private val context: Context) {
             totalCount++
             totalSize += wrapper.length
 
-            if (fileName == ".env") {
-                hasDotEnv = true
-            }
-            if (fileName == ".env.example") {
-                hasDotEnvExample = true
-            }
-
             if (fileName == "settings.gradle.kts") {
-                hasSettingsGradleKts = true
+                hasSettingsGradle = true
                 gradleDslType = "Kotlin DSL (.kts)"
             } else if (fileName == "settings.gradle") {
                 hasSettingsGradle = true
@@ -115,12 +101,6 @@ class ProjectScanner(private val context: Context) {
 
             if (fileName == "build.gradle.kts" || fileName == "build.gradle") {
                 hasBuildGradle = true
-                if (fileName == "build.gradle.kts" && (relPath.startsWith("app/") || relPath == "build.gradle.kts")) {
-                    hasAppBuildGradleKts = true
-                }
-                if (fileName == "build.gradle" && (relPath.startsWith("app/") || relPath == "build.gradle")) {
-                    hasAppBuildGradle = true
-                }
 
                 // Check if this is inside a module folder like app/build.gradle.kts
                 val parts = relPath.split("/")
@@ -148,14 +128,6 @@ class ProjectScanner(private val context: Context) {
                 hasGradlew = true
             }
 
-            if (fileName.equals("gradle-wrapper.jar", ignoreCase = true) || relPath.endsWith("gradle/wrapper/gradle-wrapper.jar", ignoreCase = true)) {
-                hasWrapperJar = true
-            }
-
-            if (fileName.equals("gradle-wrapper.properties", ignoreCase = true) || relPath.endsWith("gradle/wrapper/gradle-wrapper.properties", ignoreCase = true)) {
-                hasWrapperProps = true
-            }
-
             if (fileName == "AndroidManifest.xml") {
                 hasAndroidManifest = true
             }
@@ -167,19 +139,19 @@ class ProjectScanner(private val context: Context) {
 
         val primaryModule = if (moduleNames.contains("app")) "app" else moduleNames.first()
 
-        val isValid = (hasSettingsGradle || hasSettingsGradleKts || hasBuildGradle) && files.isNotEmpty() && hasAndroidManifest
-
-        if (!hasSettingsGradle && !hasSettingsGradleKts && !hasBuildGradle) {
+        if (!hasSettingsGradle && !hasBuildGradle) {
             messages.add("No settings.gradle or build.gradle found. Selected folder may not be a valid Gradle project.")
         }
 
-        if (!hasGradlew || !hasWrapperJar || !hasWrapperProps) {
-            messages.add("Gradle Wrapper missing — remote Gradle fallback will be used.")
+        if (!hasGradlew) {
+            messages.add("Gradle Wrapper ('gradlew') not found. Native APK Builder will use standard Gradle wrapper.")
         }
 
         if (!hasAndroidManifest) {
             messages.add("AndroidManifest.xml not found in primary module.")
         }
+
+        val isValid = (hasSettingsGradle || hasBuildGradle) && files.isNotEmpty()
 
         return ProjectInfo(
             projectName = projectName,
@@ -193,13 +165,6 @@ class ProjectScanner(private val context: Context) {
             hasGradleWrapper = hasGradlew,
             hasAndroidManifest = hasAndroidManifest,
             gradleDslType = gradleDslType,
-            hasDotEnv = hasDotEnv,
-            hasDotEnvExample = hasDotEnvExample,
-            hasSettingsGradle = hasSettingsGradle,
-            hasSettingsGradleKts = hasSettingsGradleKts,
-            hasAppBuildGradle = hasAppBuildGradle,
-            hasAppBuildGradleKts = hasAppBuildGradleKts,
-            hasWrapperJar = hasWrapperJar,
             isValid = isValid,
             validationMessages = messages,
             totalFilesCount = totalCount,
@@ -213,9 +178,6 @@ class ProjectScanner(private val context: Context) {
     }
 
     private fun isIgnored(relPath: String, fileName: String): Boolean {
-        if (fileName.equals("gradle-wrapper.jar", ignoreCase = true) || relPath.endsWith("gradle/wrapper/gradle-wrapper.jar", ignoreCase = true)) {
-            return false
-        }
         val parts = relPath.split("/")
         for (part in parts) {
             if (ignoredPaths.contains(part)) return true
@@ -286,12 +248,6 @@ class ProjectScanner(private val context: Context) {
 
             while (entry != null) {
                 val newFile = File(destDir, entry.name)
-                val canonicalDest = destDir.canonicalPath
-                val canonicalFile = newFile.canonicalPath
-                if (!canonicalFile.startsWith(canonicalDest + File.separator) && canonicalFile != canonicalDest) {
-                    throw SecurityException("Zip Slip vulnerability attempt blocked: ${entry.name}")
-                }
-
                 if (entry.isDirectory) {
                     newFile.mkdirs()
                 } else {

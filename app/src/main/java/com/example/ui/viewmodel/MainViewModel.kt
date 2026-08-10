@@ -5,7 +5,6 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.api.models.GitHubRepo
-import com.example.data.api.models.GitHubWorkflow
 import com.example.data.api.models.WorkflowRun
 import com.example.data.auth.AuthState
 import com.example.data.auth.GitHubAuthManager
@@ -43,10 +42,6 @@ data class UiState(
     val userRepositories: List<GitHubRepo> = emptyList(),
     val isLoadingRepos: Boolean = false,
     val selectedRepository: GitHubRepo? = null,
-    val discoveredWorkflows: List<GitHubWorkflow> = emptyList(),
-    val selectedWorkflow: GitHubWorkflow? = null,
-    val isLoadingWorkflows: Boolean = false,
-    val workflowErrorMessage: String? = null,
     val buildType: String = "debug", // "debug" or "release"
     val activeBuildState: ActiveBuildState = ActiveBuildState.Idle,
     val buildLogsText: String? = null,
@@ -119,15 +114,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val res = gitHubRepo.listUserRepositories(token)
             if (res.isSuccess) {
                 val repos = res.getOrDefault(emptyList())
-                val defaultRepo = repos.firstOrNull()
+                val defaultRepo = repos.find { it.name.equals("native-apk-builder", ignoreCase = true) } ?: repos.firstOrNull()
                 _uiState.value = _uiState.value.copy(
                     userRepositories = repos,
                     selectedRepository = _uiState.value.selectedRepository ?: defaultRepo,
                     isLoadingRepos = false
                 )
-                if (_uiState.value.selectedRepository != null) {
-                    loadWorkflowsForSelectedRepo()
-                }
             } else {
                 _uiState.value = _uiState.value.copy(
                     isLoadingRepos = false,
@@ -139,56 +131,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectRepository(repo: GitHubRepo) {
         _uiState.value = _uiState.value.copy(selectedRepository = repo)
-        loadWorkflowsForSelectedRepo(repoOverride = repo)
-    }
-
-    fun loadWorkflowsForSelectedRepo(repoOverride: GitHubRepo? = null) {
-        val auth = authManager.authState.value as? AuthState.Authenticated ?: return
-        val repo = repoOverride ?: _uiState.value.selectedRepository ?: return
-        val owner = repo.owner?.login ?: auth.user.login
-
-        viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(
-                isLoadingWorkflows = true,
-                workflowErrorMessage = null
-            )
-            val res = buildEngine.findWorkflows(auth.token, owner, repo.name)
-            if (res.isSuccess) {
-                var workflows: List<GitHubWorkflow> = res.getOrDefault(emptyList())
-                if (workflows.isEmpty()) {
-                    val ensureRes = buildEngine.ensureWorkflowExists(
-                        auth.token, owner, repo.name, repo.defaultBranch ?: "main"
-                    )
-                    if (ensureRes.isSuccess) {
-                        workflows = listOf(ensureRes.getOrThrow())
-                    }
-                }
-
-                val preferred = workflows.find { wf ->
-                    wf.path.contains("android", ignoreCase = true) || 
-                    wf.name.contains("Android", ignoreCase = true) || 
-                    wf.name.contains("APK", ignoreCase = true)
-                } ?: workflows.firstOrNull()
-
-                _uiState.value = _uiState.value.copy(
-                    discoveredWorkflows = workflows,
-                    selectedWorkflow = preferred,
-                    isLoadingWorkflows = false,
-                    workflowErrorMessage = if (workflows.isEmpty()) "No build workflow found in repository." else null
-                )
-            } else {
-                _uiState.value = _uiState.value.copy(
-                    discoveredWorkflows = emptyList(),
-                    selectedWorkflow = null,
-                    isLoadingWorkflows = false,
-                    workflowErrorMessage = res.exceptionOrNull()?.localizedMessage ?: "Failed to list workflows."
-                )
-            }
-        }
-    }
-
-    fun selectWorkflow(workflow: GitHubWorkflow) {
-        _uiState.value = _uiState.value.copy(selectedWorkflow = workflow)
     }
 
     fun createPrivateBuildRepository(repoName: String = "native-apk-builder") {
@@ -204,7 +146,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     selectedRepository = newRepo,
                     isCreatingRepo = false
                 )
-                loadWorkflowsForSelectedRepo(repoOverride = newRepo)
             } else {
                 _uiState.value = _uiState.value.copy(
                     isCreatingRepo = false,
@@ -265,8 +206,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return
         }
 
-        val dispatchStartTimeMillis = System.currentTimeMillis()
-
         viewModelScope.launch {
             try {
                 // Step 1: Upload project
@@ -295,38 +234,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     return@launch
                 }
 
-                val newCommitSha = uploadResult.getOrNull()
-
-                // Step 2: Detect or trigger GitHub Actions workflow run
+                // Step 2: Trigger GitHub Actions
                 _uiState.value = _uiState.value.copy(activeBuildState = ActiveBuildState.TriggeringWorkflow)
 
-                var selectedWf = _uiState.value.selectedWorkflow
-                if (selectedWf == null) {
-                    val ensureRes = buildEngine.ensureWorkflowExists(
-                        auth.token, repo.owner?.login ?: auth.user.login, repo.name, repo.defaultBranch ?: "main"
-                    )
-                    selectedWf = ensureRes.getOrNull()
-                }
-
-                val workflowFileNameOrId = selectedWf?.path?.substringAfterLast("/")
-                    ?: selectedWf?.id?.toString()
-                    ?: "android.yml"
-
-                val triggerResult = buildEngine.findOrTriggerRun(
+                val triggerResult = buildEngine.triggerBuild(
                     token = auth.token,
                     owner = repo.owner?.login ?: auth.user.login,
                     repo = repo.name,
-                    workflowFileNameOrId = workflowFileNameOrId,
-                    headSha = newCommitSha,
-                    branch = repo.defaultBranch ?: "main",
-                    dispatchStartTimeMillis = dispatchStartTimeMillis,
-                    buildType = _uiState.value.buildType
+                    buildType = _uiState.value.buildType,
+                    branch = repo.defaultBranch ?: "main"
                 )
 
                 if (triggerResult.isFailure) {
-                    val err = triggerResult.exceptionOrNull()?.localizedMessage ?: "Failed to find or trigger workflow run."
+                    val err = triggerResult.exceptionOrNull()?.localizedMessage ?: "Failed to trigger workflow."
                     _uiState.value = _uiState.value.copy(
-                        activeBuildState = ActiveBuildState.Failed(null, "Workflow run error: $err")
+                        activeBuildState = ActiveBuildState.Failed(null, "Workflow dispatch error: $err")
                     )
                     return@launch
                 }
@@ -448,19 +370,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun openLogsModal(runId: Long?, repositoryName: String? = null) {
+    fun openLogsModal(runId: Long?) {
         val auth = authManager.authState.value as? AuthState.Authenticated
-        var targetOwner = _uiState.value.selectedRepository?.owner?.login ?: auth?.user?.login
-        var targetRepo = _uiState.value.selectedRepository?.name
+        val repo = _uiState.value.selectedRepository
 
-        if (!repositoryName.isNullOrEmpty() && repositoryName.contains("/")) {
-            targetOwner = repositoryName.substringBefore("/")
-            targetRepo = repositoryName.substringAfter("/")
-        }
-
-        if (auth != null && targetOwner != null && targetRepo != null && runId != null) {
+        if (auth != null && repo != null && runId != null) {
             viewModelScope.launch {
-                val logsRes = buildEngine.getBuildLogs(auth.token, targetOwner, targetRepo, runId)
+                val logsRes = buildEngine.getBuildLogs(auth.token, repo.owner?.login ?: auth.user.login, repo.name, runId)
                 val text = logsRes.getOrNull() ?: "Unable to fetch logs for run #$runId"
                 _uiState.value = _uiState.value.copy(buildLogsText = text, showLogsModal = true)
             }
@@ -486,33 +402,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun saveApkToDownloads(file: File) {
         apkInstaller.saveToDownloads(file)
-    }
-
-    fun cancelBuild() {
-        pollingJob?.cancel()
-        val auth = authManager.authState.value as? AuthState.Authenticated
-        val repo = _uiState.value.selectedRepository
-        val active = _uiState.value.activeBuildState
-
-        val runId = when (active) {
-            is ActiveBuildState.PollingStatus -> active.runId
-            is ActiveBuildState.DownloadingArtifact -> active.runId
-            else -> null
-        }
-
-        if (auth != null && repo != null && runId != null) {
-            viewModelScope.launch {
-                val owner = repo.owner?.login ?: auth.user.login
-                buildEngine.cancelBuild(auth.token, owner, repo.name, runId)
-                _uiState.value = _uiState.value.copy(
-                    activeBuildState = ActiveBuildState.Failed(runId, "Build Cancelled by User")
-                )
-            }
-        } else {
-            _uiState.value = _uiState.value.copy(
-                activeBuildState = ActiveBuildState.Failed(null, "Build Cancelled by User")
-            )
-        }
     }
 
     fun resetActiveBuildState() {

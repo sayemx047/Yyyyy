@@ -96,7 +96,7 @@ fun BuildHistoryScreen(
                             if (path != null) viewModel.shareApk(File(path))
                         },
                         onViewLogs = { runId ->
-                            viewModel.openLogsModal(runId, item.repositoryName)
+                            viewModel.openLogsModal(runId)
                         }
                     )
                 }

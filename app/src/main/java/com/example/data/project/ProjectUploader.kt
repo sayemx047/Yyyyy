@@ -3,7 +3,6 @@ package com.example.data.project
 import android.content.Context
 import android.net.Uri
 import android.util.Base64
-import androidx.documentfile.provider.DocumentFile
 import com.example.data.api.GitHubApiService
 import com.example.data.api.models.*
 import kotlinx.coroutines.Dispatchers
@@ -38,14 +37,6 @@ class ProjectUploader(private val context: Context, private val apiService: GitH
             if (branchRefResp.isSuccessful && branchRefResp.body() != null) {
                 val currentCommitSha = branchRefResp.body()!!.`gitObject`.sha
 
-                // Fetch current commit details to get the actual base TREE SHA
-                val commitDetailsResp = apiService.getCommitDetails(authHeader, owner, repo, currentCommitSha)
-                if (!commitDetailsResp.isSuccessful || commitDetailsResp.body() == null) {
-                    val err = commitDetailsResp.errorBody()?.string() ?: "Unable to read current commit tree."
-                    return@withContext Result.failure(Exception("Failed to get current Git tree: $err"))
-                }
-                val baseTreeSha = commitDetailsResp.body()!!.tree.sha
-
                 // Build tree items
                 val treeItems = mutableListOf<GitTreeItem>()
                 var count = 0
@@ -53,48 +44,23 @@ class ProjectUploader(private val context: Context, private val apiService: GitH
                     count++
                     onProgress("Processing file $count/${filesToUpload.size}: ${item.relativePath}", 0.3f + 0.3f * (count.toFloat() / filesToUpload.size))
 
+                    val contentStr = String(item.contentBytes, Charsets.UTF_8)
                     val mode = if (item.isExecutable || item.relativePath.endsWith("gradlew")) "100755" else "100644"
 
-                    if (isBinaryFile(item.relativePath, item.contentBytes)) {
-                        // Binary file: use GitHub Git Blobs API (base64)
-                        val base64Str = Base64.encodeToString(item.contentBytes, Base64.NO_WRAP)
-                        val blobResp = apiService.createBlob(
-                            authHeader, owner, repo,
-                            CreateBlobRequest(content = base64Str, encoding = "base64")
+                    treeItems.add(
+                        GitTreeItem(
+                            path = item.relativePath,
+                            mode = mode,
+                            type = "blob",
+                            content = contentStr
                         )
-
-                        if (blobResp.isSuccessful && blobResp.body() != null) {
-                            val blobSha = blobResp.body()!!.sha
-                            treeItems.add(
-                                GitTreeItem(
-                                    path = item.relativePath,
-                                    mode = mode,
-                                    type = "blob",
-                                    sha = blobSha
-                                )
-                            )
-                        } else {
-                            val err = blobResp.errorBody()?.string() ?: "Blob creation failed HTTP ${blobResp.code()}"
-                            return@withContext Result.failure(Exception("Failed to upload binary file (${item.relativePath}): $err"))
-                        }
-                    } else {
-                        // Text file: send UTF-8 content directly in Tree
-                        val contentStr = String(item.contentBytes, Charsets.UTF_8)
-                        treeItems.add(
-                            GitTreeItem(
-                                path = item.relativePath,
-                                mode = mode,
-                                type = "blob",
-                                content = contentStr
-                            )
-                        )
-                    }
+                    )
                 }
 
                 onProgress("Creating Git Tree on GitHub...", 0.7f)
                 val createTreeResp = apiService.createTree(
                     authHeader, owner, repo,
-                    CreateTreeRequest(baseTreeSha = baseTreeSha, tree = treeItems)
+                    CreateTreeRequest(baseTreeSha = currentCommitSha, tree = treeItems)
                 )
 
                 if (!createTreeResp.isSuccessful || createTreeResp.body() == null) {
@@ -182,12 +148,12 @@ class ProjectUploader(private val context: Context, private val apiService: GitH
         val files = current.listFiles() ?: return
         for (f in files) {
             val name = f.name
-            val relPath = f.relativeTo(rootDir).path.replace("\\", "/")
-            if (isIgnoredFile(name, relPath, f.isDirectory)) continue
+            if (isIgnoredFile(name, f.isDirectory)) continue
 
             if (f.isDirectory) {
                 collectLocalFiles(rootDir, f, result)
             } else {
+                val relPath = f.relativeTo(rootDir).path.replace("\\", "/")
                 val isExec = name == "gradlew" || f.canExecute()
                 result.add(ProjectFileItem(relPath, f.readBytes(), isExec))
             }
@@ -195,74 +161,21 @@ class ProjectUploader(private val context: Context, private val apiService: GitH
     }
 
     private fun collectSafFiles(rootUri: Uri, result: MutableList<ProjectFileItem>) {
-        val rootDoc = DocumentFile.fromTreeUri(context, rootUri) ?: return
-        traverseSafDocument(rootDoc, "", result)
+        val docScanner = ProjectScanner(context)
+        // Handled via SAF traversal inside ProjectScanner
     }
 
-    private fun traverseSafDocument(
-        dir: DocumentFile,
-        currentPath: String,
-        result: MutableList<ProjectFileItem>
-    ) {
-        val files = dir.listFiles()
-        for (f in files) {
-            val name = f.name ?: continue
-            val relPath = if (currentPath.isEmpty()) name else "$currentPath/$name"
-            if (isIgnoredFile(name, relPath, f.isDirectory)) continue
-
-            if (f.isDirectory) {
-                traverseSafDocument(f, relPath, result)
-            } else {
-                val bytes = context.contentResolver.openInputStream(f.uri)?.use { it.readBytes() } ?: continue
-                val isExec = name == "gradlew"
-                result.add(ProjectFileItem(relPath, bytes, isExec))
-            }
-        }
-    }
-
-    private fun isIgnoredFile(name: String, relativePath: String, isDir: Boolean): Boolean {
+    private fun isIgnoredFile(name: String, isDir: Boolean): Boolean {
         val ignoredDirs = setOf(".gradle", "build", ".idea", ".git", "captures", ".externalNativeBuild")
-        val ignoredFiles = setOf("local.properties", ".DS_Store", "thumbs.db")
-        val ignoredExtensions = setOf("jks", "keystore", "apk", "aab")
+        val ignoredExtensions = setOf("jks", "keystore", "apk", "aab", "jar", "zip", "tar", "gz")
+        val ignoredFiles = setOf("local.properties", ".DS_Store", "thumbs.db", ".env")
 
-        if (isDir) {
-            return ignoredDirs.contains(name)
-        }
-
-        // Never ignore .env, .env.example, gradle-wrapper.jar, gradlew, gradlew.bat, or gradle-wrapper.properties
-        if (name == ".env" || name == ".env.example") {
-            return false
-        }
-        if (name.equals("gradle-wrapper.jar", ignoreCase = true) || relativePath.endsWith("gradle/wrapper/gradle-wrapper.jar", ignoreCase = true)) {
-            return false
-        }
-        if (name == "gradlew" || name == "gradlew.bat" || name == "gradle-wrapper.properties") {
-            return false
-        }
-
+        if (isDir && ignoredDirs.contains(name)) return true
         if (ignoredFiles.contains(name)) return true
 
         val ext = name.substringAfterLast(".", "").lowercase()
         if (ignoredExtensions.contains(ext)) return true
 
-        return false
-    }
-
-    private fun isBinaryFile(relativePath: String, bytes: ByteArray): Boolean {
-        val ext = relativePath.substringAfterLast(".", "").lowercase()
-        val binaryExtensions = setOf(
-            "jar", "png", "jpg", "jpeg", "webp", "gif", "ico", "so", "aar", "class", 
-            "zip", "gz", "tar", "ttf", "otf", "eot", "woff", "woff2", "pb", "db", "sqlite"
-        )
-        if (binaryExtensions.contains(ext)) return true
-
-        // Check first 1000 bytes for null bytes
-        val sampleSize = minOf(bytes.size, 1000)
-        for (i in 0 until sampleSize) {
-            if (bytes[i] == 0.toByte()) {
-                return true
-            }
-        }
         return false
     }
 }

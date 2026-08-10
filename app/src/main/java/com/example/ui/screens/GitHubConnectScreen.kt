@@ -36,7 +36,7 @@ fun GitHubConnectScreen(
     uiState: com.example.ui.viewmodel.UiState
 ) {
     val context = LocalContext.current
-    var newRepoNameInput by remember { mutableStateOf("my-android-app") }
+    var newRepoNameInput by remember { mutableStateOf("native-apk-builder") }
 
     Column(
         modifier = Modifier

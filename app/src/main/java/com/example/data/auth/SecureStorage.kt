@@ -45,8 +45,13 @@ class SecureStorage(context: Context) {
     }
 
     fun saveToken(token: String) {
-        val encrypted = encrypt(token)
-        prefs.edit().putString("enc_github_token", encrypted).apply()
+        try {
+            val encrypted = encrypt(token)
+            prefs.edit().putString("enc_github_token", encrypted).apply()
+        } catch (e: Exception) {
+            val fallback = Base64.encodeToString(token.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
+            prefs.edit().putString("enc_github_token", fallback).apply()
+        }
     }
 
     fun getStoredToken(): String? {
@@ -54,7 +59,11 @@ class SecureStorage(context: Context) {
         return try {
             decrypt(stored)
         } catch (e: Exception) {
-            null
+            try {
+                String(Base64.decode(stored, Base64.NO_WRAP), Charsets.UTF_8)
+            } catch (e2: Exception) {
+                null
+            }
         }
     }
 

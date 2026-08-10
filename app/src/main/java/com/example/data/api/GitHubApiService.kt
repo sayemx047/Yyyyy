@@ -41,21 +41,6 @@ interface GitHubApiService {
         @Body request: CreateOrUpdateFileRequest
     ): Response<ResponseBody>
 
-    @GET("repos/{owner}/{repo}/actions/workflows")
-    suspend fun getWorkflows(
-        @Header("Authorization") authHeader: String,
-        @Path("owner") owner: String,
-        @Path("repo") repo: String
-    ): Response<WorkflowsResponse>
-
-    @GET("repos/{owner}/{repo}/git/commits/{commit_sha}")
-    suspend fun getCommitDetails(
-        @Header("Authorization") authHeader: String,
-        @Path("owner") owner: String,
-        @Path("repo") repo: String,
-        @Path("commit_sha") commitSha: String
-    ): Response<GitCommitDetails>
-
     @POST("repos/{owner}/{repo}/actions/workflows/{workflow_id}/dispatches")
     suspend fun dispatchWorkflow(
         @Header("Authorization") authHeader: String,
@@ -70,9 +55,7 @@ interface GitHubApiService {
         @Header("Authorization") authHeader: String,
         @Path("owner") owner: String,
         @Path("repo") repo: String,
-        @Query("branch") branch: String? = null,
-        @Query("event") event: String? = null,
-        @Query("head_sha") headSha: String? = null,
+        @Query("event") event: String? = "workflow_dispatch",
         @Query("per_page") perPage: Int = 10
     ): Response<WorkflowRunsResponse>
 
@@ -100,48 +83,6 @@ interface GitHubApiService {
         @Path("repo") repo: String,
         @Path("artifact_id") artifactId: Long
     ): Response<ResponseBody>
-
-    @POST("repos/{owner}/{repo}/actions/runs/{run_id}/cancel")
-    suspend fun cancelWorkflowRun(
-        @Header("Authorization") authHeader: String,
-        @Path("owner") owner: String,
-        @Path("repo") repo: String,
-        @Path("run_id") runId: Long
-    ): Response<ResponseBody>
-
-    @GET("repos/{owner}/{repo}/contents/{path}")
-    suspend fun getFileContent(
-        @Header("Authorization") authHeader: String,
-        @Path("owner") owner: String,
-        @Path("repo") repo: String,
-        @Path("path") path: String,
-        @Query("ref") ref: String? = null
-    ): Response<GitHubContentResponse>
-
-    @GET("repos/{owner}/{repo}/actions/runs/{run_id}/jobs")
-    suspend fun getRunJobs(
-        @Header("Authorization") authHeader: String,
-        @Path("owner") owner: String,
-        @Path("repo") repo: String,
-        @Path("run_id") runId: Long
-    ): Response<JobsResponse>
-
-    @Streaming
-    @GET("repos/{owner}/{repo}/actions/jobs/{job_id}/logs")
-    suspend fun downloadJobLogs(
-        @Header("Authorization") authHeader: String,
-        @Path("owner") owner: String,
-        @Path("repo") repo: String,
-        @Path("job_id") jobId: Long
-    ): Response<ResponseBody>
-
-    @POST("repos/{owner}/{repo}/git/blobs")
-    suspend fun createBlob(
-        @Header("Authorization") authHeader: String,
-        @Path("owner") owner: String,
-        @Path("repo") repo: String,
-        @Body request: CreateBlobRequest
-    ): Response<CreateBlobResponse>
 
     // Git Data API for fast commit & batch file uploads
     @GET("repos/{owner}/{repo}/git/ref/heads/{branch}")

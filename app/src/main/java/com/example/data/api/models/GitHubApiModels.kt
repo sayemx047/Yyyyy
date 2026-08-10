@@ -48,35 +48,6 @@ data class WorkflowDispatchRequest(
 )
 
 @JsonClass(generateAdapter = true)
-data class WorkflowsResponse(
-    @Json(name = "total_count") val totalCount: Int,
-    @Json(name = "workflows") val workflows: List<GitHubWorkflow>
-)
-
-@JsonClass(generateAdapter = true)
-data class GitHubWorkflow(
-    @Json(name = "id") val id: Long,
-    @Json(name = "node_id") val nodeId: String? = null,
-    @Json(name = "name") val name: String,
-    @Json(name = "path") val path: String,
-    @Json(name = "state") val state: String,
-    @Json(name = "html_url") val htmlUrl: String? = null,
-    @Json(name = "badge_url") val badgeUrl: String? = null
-)
-
-@JsonClass(generateAdapter = true)
-data class GitTreeReference(
-    @Json(name = "sha") val sha: String,
-    @Json(name = "url") val url: String? = null
-)
-
-@JsonClass(generateAdapter = true)
-data class GitCommitDetails(
-    @Json(name = "sha") val sha: String,
-    @Json(name = "tree") val tree: GitTreeReference
-)
-
-@JsonClass(generateAdapter = true)
 data class WorkflowRunsResponse(
     @Json(name = "total_count") val totalCount: Int,
     @Json(name = "workflow_runs") val workflowRuns: List<WorkflowRun>
@@ -87,9 +58,6 @@ data class WorkflowRun(
     @Json(name = "id") val id: Long,
     @Json(name = "name") val name: String? = null,
     @Json(name = "head_branch") val headBranch: String? = null,
-    @Json(name = "head_sha") val headSha: String? = null,
-    @Json(name = "event") val event: String? = null,
-    @Json(name = "workflow_id") val workflowId: Long? = null,
     @Json(name = "status") val status: String, // "queued", "in_progress", "completed"
     @Json(name = "conclusion") val conclusion: String? = null, // "success", "failure", "cancelled", "timed_out"
     @Json(name = "html_url") val htmlUrl: String,
@@ -133,7 +101,7 @@ data class GitReference(
 @JsonClass(generateAdapter = true)
 data class GitObject(
     @Json(name = "sha") val sha: String,
-    @Json(name = "type") val type: String? = null
+    @Json(name = "type") val type: String
 )
 
 @JsonClass(generateAdapter = true)
@@ -174,53 +142,6 @@ data class CreateCommitResponse(
 data class UpdateRefRequest(
     @Json(name = "sha") val sha: String,
     @Json(name = "force") val force: Boolean = true
-)
-
-@JsonClass(generateAdapter = true)
-data class CreateBlobRequest(
-    @Json(name = "content") val content: String,
-    @Json(name = "encoding") val encoding: String = "base64"
-)
-
-@JsonClass(generateAdapter = true)
-data class CreateBlobResponse(
-    @Json(name = "sha") val sha: String,
-    @Json(name = "url") val url: String? = null
-)
-
-@JsonClass(generateAdapter = true)
-data class GitHubContentResponse(
-    @Json(name = "name") val name: String,
-    @Json(name = "path") val path: String,
-    @Json(name = "sha") val sha: String,
-    @Json(name = "size") val size: Long,
-    @Json(name = "type") val type: String,
-    @Json(name = "content") val content: String? = null
-)
-
-@JsonClass(generateAdapter = true)
-data class JobsResponse(
-    @Json(name = "total_count") val totalCount: Int,
-    @Json(name = "jobs") val jobs: List<WorkflowJob>
-)
-
-@JsonClass(generateAdapter = true)
-data class WorkflowJob(
-    @Json(name = "id") val id: Long,
-    @Json(name = "run_id") val runId: Long,
-    @Json(name = "name") val name: String,
-    @Json(name = "status") val status: String,
-    @Json(name = "conclusion") val conclusion: String? = null,
-    @Json(name = "html_url") val htmlUrl: String? = null,
-    @Json(name = "steps") val steps: List<JobStep>? = null
-)
-
-@JsonClass(generateAdapter = true)
-data class JobStep(
-    @Json(name = "name") val name: String,
-    @Json(name = "status") val status: String,
-    @Json(name = "conclusion") val conclusion: String? = null,
-    @Json(name = "number") val number: Int
 )
 
 @JsonClass(generateAdapter = true)

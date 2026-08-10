@@ -179,7 +179,7 @@ fun MainBuildScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
                             Text(
-                                text = repo?.fullName ?: "No repository selected",
+                                text = repo?.fullName ?: "native-apk-builder (Not selected)",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.SemiBold
                             )
@@ -308,7 +308,7 @@ fun MainBuildScreen(
                                     Text("${project.compileSdk} / ${project.targetSdk}", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
                                     Spacer(modifier = Modifier.height(6.dp))
                                     Text("Gradle Wrapper:", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text(if (project.hasGradleWrapper) "✓ Found" else "⚠ Missing (Runner fallback)", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
+                                    Text(if (project.hasGradleWrapper) "✓ Found" else "Missing (Auto-added)", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold)
                                 }
                             }
 
@@ -344,44 +344,6 @@ fun MainBuildScreen(
                 )
 
                 Spacer(modifier = Modifier.height(12.dp))
-
-                if (uiState.discoveredWorkflows.isNotEmpty()) {
-                    var workflowExpanded by remember { mutableStateOf(false) }
-                    Text(
-                        text = "Workflow File:",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    ExposedDropdownMenuBox(
-                        expanded = workflowExpanded,
-                        onExpandedChange = { workflowExpanded = !workflowExpanded }
-                    ) {
-                        OutlinedTextField(
-                            value = uiState.selectedWorkflow?.name ?: "Default Workflow",
-                            onValueChange = {},
-                            readOnly = true,
-                            trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = workflowExpanded) },
-                            modifier = Modifier.menuAnchor().fillMaxWidth(),
-                            shape = RoundedCornerShape(10.dp)
-                        )
-                        ExposedDropdownMenu(
-                            expanded = workflowExpanded,
-                            onDismissRequest = { workflowExpanded = false }
-                        ) {
-                            uiState.discoveredWorkflows.forEach { wf ->
-                                DropdownMenuItem(
-                                    text = { Text("${wf.name} (${wf.path})") },
-                                    onClick = {
-                                        viewModel.selectWorkflow(wf)
-                                        workflowExpanded = false
-                                    }
-                                )
-                            }
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-                }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -513,22 +475,12 @@ fun MainBuildScreen(
 
                         Row(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                            horizontalArrangement = Arrangement.SpaceBetween
                         ) {
                             TextButton(onClick = { viewModel.openLogsModal(activeState.runId) }) {
                                 Icon(Icons.Default.Terminal, contentDescription = null, modifier = Modifier.size(16.dp))
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Text("View Logs")
-                            }
-
-                            TextButton(
-                                onClick = { viewModel.cancelBuild() },
-                                colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                            ) {
-                                Icon(Icons.Default.Cancel, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text("Cancel Build")
                             }
                         }
                     }
@@ -629,46 +581,19 @@ fun MainBuildScreen(
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(Icons.Default.Error, contentDescription = null, tint = MaterialTheme.colorScheme.error)
                             Spacer(modifier = Modifier.width(8.dp))
-                            Column {
-                                Text(
-                                    text = "Build Failed",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.error
-                                )
-                                if (activeState.runId != null) {
-                                    Text(
-                                        text = "Run #${activeState.runId}",
-                                        style = MaterialTheme.typography.labelMedium,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onErrorContainer
-                                    )
-                                }
-                            }
+                            Text(
+                                text = "BUILD FAILED ❌",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.error
+                            )
                         }
 
-                        Spacer(modifier = Modifier.height(10.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             text = activeState.errorMessage,
                             style = MaterialTheme.typography.bodyMedium
                         )
-
-                        if (!activeState.logOutput.isNullOrEmpty()) {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Surface(
-                                color = MaterialTheme.colorScheme.surface,
-                                shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text(
-                                    text = activeState.logOutput,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    fontFamily = FontFamily.Monospace,
-                                    modifier = Modifier.padding(8.dp),
-                                    maxLines = 6
-                                )
-                            }
-                        }
 
                         Spacer(modifier = Modifier.height(12.dp))
 
@@ -676,27 +601,22 @@ fun MainBuildScreen(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            if (activeState.runId != null) {
-                                OutlinedButton(
-                                    onClick = { viewModel.openLogsModal(activeState.runId) },
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text("VIEW LOGS")
-                                }
+                            OutlinedButton(
+                                onClick = { viewModel.openLogsModal(activeState.runId) },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("VIEW LOGS")
                             }
 
-                            val repo = uiState.selectedRepository
-                            if (repo != null && activeState.runId != null) {
-                                OutlinedButton(
-                                    onClick = {
-                                        val url = "https://github.com/${repo.fullName}/actions/runs/${activeState.runId}"
-                                        val intent = android.content.Intent(android.content.Intent.ACTION_VIEW, Uri.parse(url))
-                                        context.startActivity(intent)
-                                    },
-                                    modifier = Modifier.weight(1f)
-                                ) {
-                                    Text("OPEN GITHUB")
-                                }
+                            OutlinedButton(
+                                onClick = {
+                                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                                    clipboard.setPrimaryClip(ClipData.newPlainText("Error", activeState.errorMessage))
+                                    Toast.makeText(context, "Error copied to clipboard", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("COPY ERROR")
                             }
 
                             Button(
