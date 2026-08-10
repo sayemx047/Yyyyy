@@ -1,6 +1,6 @@
 {
-  "name": "Native APK Builder",
-  "description": "Build real Android APKs directly from your phone using GitHub Actions.",
+  "name": "ArenaX Esports",
+  "description": "Tournament Gaming Platform for Free Fire with bKash wallet, automated squad registrations, live chat support, and admin tournament controls.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }
