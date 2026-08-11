@@ -1,306 +1,310 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.platform.LocalClipboardManager
-import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.UserEntity
-import com.example.data.WalletTransactionEntity
+import com.example.data.db.WalletTransactionEntity
+import com.example.data.db.UserEntity
+import com.example.ui.components.copyToClipboard
 import com.example.ui.theme.*
+import com.example.ui.viewmodel.MainViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun WalletScreen(
+    viewModel: MainViewModel,
     currentUser: UserEntity?,
-    transactions: List<WalletTransactionEntity>,
-    txIdInput: String,
-    amountInput: String,
-    statusMessage: String?,
-    isLoading: Boolean,
-    onTxIdChange: (String) -> Unit,
-    onAmountChange: (String) -> Unit,
-    onSubmitRecharge: () -> Unit,
-    onClearStatus: () -> Unit,
-    onNavigateBack: () -> Unit
+    transactions: List<WalletTransactionEntity>
 ) {
-    val clipboardManager = LocalClipboardManager.current
-    var copiedNotice by remember { mutableStateOf(false) }
+    val context = LocalContext.current
+    var rechargeAmountText by remember { mutableStateOf("100") }
+    var transactionIdInput by remember { mutableStateOf("") }
 
-    val bkashNumber = "01789495251"
+    val bkashOfficialNumber = "01789495251"
 
-    FrostedGlassBackground {
-        Scaffold(
-            topBar = {
-                Surface(
-                    color = Color(0x14FFFFFF),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x1AFFFFFF))
-                ) {
-                    TopAppBar(
-                        title = { Text("BKASH WALLET & RECHARGE", fontWeight = FontWeight.Black, fontSize = 15.sp, letterSpacing = 1.sp) },
-                        navigationIcon = {
-                            IconButton(onClick = onNavigateBack) {
-                                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary)
-                            }
-                        },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = Color.Transparent,
-                            titleContentColor = TextPrimary
-                        )
-                    )
-                }
-            },
-            containerColor = Color.Transparent
-        ) { paddingValues ->
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp),
+        contentPadding = PaddingValues(bottom = 30.dp)
+    ) {
+        item {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(
+                text = "IN-APP WALLET & RECHARGE",
+                fontWeight = FontWeight.Black,
+                fontSize = 20.sp,
+                color = GamingPrimaryGold,
+                letterSpacing = 1.sp
+            )
+            Text(
+                text = "Manage credits, recharge via bKash, and track verification status.",
+                fontSize = 12.sp,
+                color = GamingTextSecondary
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // Wallet Balance Hero Card
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = GamingCardSurface),
+                shape = RoundedCornerShape(24.dp),
+                border = BorderStroke(1.dp, GamingGlassBorder),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                // Balance Card (Frosted Glass)
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = Color(0x18FFFFFF)),
-                        shape = RoundedCornerShape(24.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, SuccessGreen.copy(alpha = 0.6f))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text("CURRENT WALLET BALANCE", fontSize = 11.sp, color = GamingTextSecondary, letterSpacing = 1.sp)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "৳${String.format("%.2f", currentUser?.walletBalance ?: 0.0)}",
+                        fontWeight = FontWeight.Black,
+                        fontSize = 32.sp,
+                        color = GamingPrimaryGold
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Surface(
+                        color = GamingSurface,
+                        border = BorderStroke(1.dp, GamingGlassBorder),
+                        shape = RoundedCornerShape(12.dp)
                     ) {
-                        Column(
-                            modifier = Modifier.padding(20.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("CURRENT WALLET BALANCE", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = TextSecondary, letterSpacing = 1.5.sp)
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = "৳ ${String.format("%.2f", currentUser?.walletBalance ?: 0.0)} BDT",
-                                fontSize = 32.sp,
-                                fontWeight = FontWeight.Black,
-                                color = SuccessGreen
-                            )
+                            Icon(Icons.Default.VerifiedUser, contentDescription = "Instant Checkout", tint = GamingSuccessGreen, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Automatic Entry Fee Deductions Enabled", fontSize = 11.sp, color = GamingSuccessGreen)
                         }
                     }
                 }
+            }
+            Spacer(modifier = Modifier.height(20.dp))
+        }
 
-                // bKash Cash In Guide Card (Frosted Glass Pink accent)
-                item {
-                    Card(
+        // bKash Official Recharge Card
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = GamingBkashPink.copy(alpha = 0.15f)),
+                shape = RoundedCornerShape(20.dp),
+                border = androidx.compose.foundation.BorderStroke(1.5.dp, GamingBkashPink),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(
                         modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = Color(0x1AFFFFFF)),
-                        shape = RoundedCornerShape(24.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, BkashPink.copy(alpha = 0.6f))
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column(modifier = Modifier.padding(18.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Surface(
-                                    color = BkashPink,
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text("bKash", color = Color.White, fontWeight = FontWeight.Black, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp))
-                                }
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text("Official Recharge Number", fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 14.sp)
-                            }
-
-                            Spacer(modifier = Modifier.height(14.dp))
-
-                            Card(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .clickable {
-                                        clipboardManager.setText(AnnotatedString(bkashNumber))
-                                        copiedNotice = true
-                                    },
-                                colors = CardDefaults.cardColors(containerColor = Color(0x14FFFFFF)),
-                                shape = RoundedCornerShape(16.dp),
-                                border = androidx.compose.foundation.BorderStroke(1.dp, BkashPink)
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                color = GamingBkashPink,
+                                shape = RoundedCornerShape(8.dp)
                             ) {
-                                Row(
-                                    modifier = Modifier.padding(14.dp),
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-                                    Column {
-                                        Text("Send Money / Cash Out to:", fontSize = 10.sp, color = TextSecondary)
-                                        Text(bkashNumber, fontSize = 20.sp, fontWeight = FontWeight.Black, color = BkashPink)
-                                    }
-                                    Button(
-                                        onClick = {
-                                            clipboardManager.setText(AnnotatedString(bkashNumber))
-                                            copiedNotice = true
-                                        },
-                                        colors = ButtonDefaults.buttonColors(containerColor = BkashPink),
-                                        shape = RoundedCornerShape(12.dp)
-                                    ) {
-                                        Icon(Icons.Default.ContentCopy, contentDescription = "Copy", modifier = Modifier.size(16.dp))
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(if (copiedNotice) "COPIED!" else "COPY", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                    }
-                                }
+                                Text("bKash", fontWeight = FontWeight.Black, color = Color.White, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
                             }
-
-                            Spacer(modifier = Modifier.height(10.dp))
-                            Text(
-                                text = "1. Send Money via bKash to 01789495251.\n2. Copy the Transaction ID (TxID) from your bKash SMS.\n3. Enter the TxID and Amount below to submit for instant admin verification.",
-                                color = TextSecondary,
-                                fontSize = 11.sp
-                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text("Official Cash In / Personal", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = GamingTextPrimary)
                         }
                     }
-                }
 
-                // Recharge Form Card (Frosted Container)
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(containerColor = Color(0x1AFFFFFF)),
-                        shape = RoundedCornerShape(24.dp),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x2EFFFFFF))
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // bKash Number & Copy Button
+                    Surface(
+                        color = GamingDarkBackground,
+                        shape = RoundedCornerShape(14.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
-                        Column(modifier = Modifier.padding(20.dp)) {
-                            Text("SUBMIT TRANSACTION ID", fontWeight = FontWeight.Black, color = PurplePrimary, fontSize = 13.sp, letterSpacing = 1.sp)
-                            Spacer(modifier = Modifier.height(14.dp))
-
-                            OutlinedTextField(
-                                value = txIdInput,
-                                onValueChange = onTxIdChange,
-                                label = { Text("bKash Transaction ID (TxID)", color = TextSecondary) },
-                                leadingIcon = { Icon(Icons.Default.Receipt, contentDescription = null, tint = PurplePrimary) },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true,
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = PurplePrimary,
-                                    unfocusedBorderColor = Color(0x2BFFFFFF),
-                                    focusedLabelColor = PurplePrimary,
-                                    focusedContainerColor = Color(0x0DFFFFFF),
-                                    unfocusedContainerColor = Color(0x08FFFFFF)
-                                ),
-                                shape = RoundedCornerShape(16.dp)
-                            )
-
-                            Spacer(modifier = Modifier.height(12.dp))
-
-                            OutlinedTextField(
-                                value = amountInput,
-                                onValueChange = onAmountChange,
-                                label = { Text("Recharge Amount (BDT)", color = TextSecondary) },
-                                leadingIcon = { Icon(Icons.Default.AttachMoney, contentDescription = null, tint = SuccessGreen) },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true,
-                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                colors = OutlinedTextFieldDefaults.colors(
-                                    focusedBorderColor = SuccessGreen,
-                                    unfocusedBorderColor = Color(0x2BFFFFFF),
-                                    focusedLabelColor = SuccessGreen,
-                                    focusedContainerColor = Color(0x0DFFFFFF),
-                                    unfocusedContainerColor = Color(0x08FFFFFF)
-                                ),
-                                shape = RoundedCornerShape(16.dp)
-                            )
-
-                            Spacer(modifier = Modifier.height(16.dp))
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 14.dp, vertical = 10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column {
+                                Text("BKASH NUMBER", fontSize = 10.sp, color = GamingTextSecondary)
+                                Text(bkashOfficialNumber, fontWeight = FontWeight.Black, fontSize = 18.sp, color = GamingBkashPink)
+                            }
 
                             Button(
-                                onClick = onSubmitRecharge,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(50.dp),
-                                colors = ButtonDefaults.buttonColors(containerColor = BkashPink),
-                                shape = RoundedCornerShape(16.dp),
-                                enabled = !isLoading && txIdInput.isNotBlank()
+                                onClick = { copyToClipboard(context, "bKash Number", bkashOfficialNumber) },
+                                colors = ButtonDefaults.buttonColors(containerColor = GamingBkashPink),
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.testTag("copy_bkash_number_btn")
                             ) {
-                                if (isLoading) {
-                                    CircularProgressIndicator(modifier = Modifier.size(20.dp), color = Color.White)
-                                } else {
-                                    Icon(Icons.Default.Send, contentDescription = null, tint = Color.White)
-                                    Spacer(modifier = Modifier.width(8.dp))
-                                    Text("SUBMIT FOR VERIFICATION", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
-                                }
-                            }
-
-                            if (statusMessage != null) {
-                                Spacer(modifier = Modifier.height(10.dp))
-                                Text(
-                                    text = statusMessage,
-                                    color = if (statusMessage.contains("submitted")) SuccessGreen else ErrorRed,
-                                    fontSize = 12.sp,
-                                    fontWeight = FontWeight.Medium
-                                )
+                                Icon(Icons.Default.ContentCopy, contentDescription = "Copy", modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("COPY NUMBER", fontWeight = FontWeight.Bold, fontSize = 11.sp)
                             }
                         }
                     }
-                }
 
-                // Transaction History Title
-                item {
-                    Text("MY RECHARGE HISTORY", fontWeight = FontWeight.Black, color = TextSecondary, fontSize = 11.sp, letterSpacing = 1.5.sp)
-                }
+                    Spacer(modifier = Modifier.height(16.dp))
 
-                // Transaction List
-                if (transactions.isEmpty()) {
-                    item {
-                        Text("No wallet transactions yet.", color = TextSecondary, fontSize = 12.sp)
+                    Text("Recharge Instructions:", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = GamingTextPrimary)
+                    Text("1. Send Money / Cash In your amount to $bkashOfficialNumber.", fontSize = 11.sp, color = GamingTextSecondary)
+                    Text("2. Copy the Transaction ID from bKash SMS or App receipt.", fontSize = 11.sp, color = GamingTextSecondary)
+                    Text("3. Enter amount and paste Transaction ID below for instant admin verification.", fontSize = 11.sp, color = GamingTextSecondary)
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Recharge Amount Input
+                    OutlinedTextField(
+                        value = rechargeAmountText,
+                        onValueChange = { rechargeAmountText = it },
+                        label = { Text("Recharge Amount (BDT)") },
+                        leadingIcon = { Icon(Icons.Default.AttachMoney, contentDescription = "Amount", tint = GamingBkashPink) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = GamingBkashPink,
+                            focusedLabelColor = GamingBkashPink
+                        ),
+                        modifier = Modifier.fillMaxWidth().testTag("input_recharge_amount")
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Transaction ID Input
+                    OutlinedTextField(
+                        value = transactionIdInput,
+                        onValueChange = { transactionIdInput = it },
+                        label = { Text("bKash Transaction ID (e.g. BAX8942KL)") },
+                        leadingIcon = { Icon(Icons.Default.ReceiptLong, contentDescription = "TxID", tint = GamingBkashPink) },
+                        singleLine = true,
+                        colors = OutlinedTextFieldDefaults.colors(
+                            focusedBorderColor = GamingBkashPink,
+                            focusedLabelColor = GamingBkashPink
+                        ),
+                        modifier = Modifier.fillMaxWidth().testTag("input_transaction_id")
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Submit Button
+                    Button(
+                        onClick = {
+                            val amt = rechargeAmountText.toDoubleOrNull() ?: 0.0
+                            viewModel.submitRecharge(amt, transactionIdInput)
+                            transactionIdInput = ""
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = GamingBkashPink),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .testTag("submit_recharge_btn")
+                    ) {
+                        Text("SUBMIT TRANSACTION ID", fontWeight = FontWeight.Bold, fontSize = 15.sp, color = Color.White)
                     }
-                } else {
-                    items(transactions) { tx ->
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = Color(0x14FFFFFF)),
-                            shape = RoundedCornerShape(16.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x20FFFFFF))
-                        ) {
-                            Row(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(14.dp),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                }
+            }
+            Spacer(modifier = Modifier.height(24.dp))
+        }
+
+        // Transaction History Header
+        item {
+            Text(
+                text = "TRANSACTION HISTORY",
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                color = GamingAccentCyan,
+                letterSpacing = 1.sp
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+        }
+
+        if (transactions.isEmpty()) {
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = GamingSurface),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = "No previous wallet recharge transactions found.",
+                        fontSize = 13.sp,
+                        color = GamingTextSecondary,
+                        modifier = Modifier.padding(20.dp)
+                    )
+                }
+            }
+        } else {
+            items(transactions) { tx ->
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = GamingCardSurface),
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 4.dp)
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = "TxID: ${tx.transactionId}",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = GamingTextPrimary
+                            )
+                            Text(
+                                text = "bKash: ${tx.bkashNumber}",
+                                fontSize = 11.sp,
+                                color = GamingTextSecondary
+                            )
+                        }
+
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = "+ BDT ${tx.amount.toInt()}",
+                                fontWeight = FontWeight.Black,
+                                fontSize = 15.sp,
+                                color = GamingPrimaryGold
+                            )
+
+                            val badgeColor = when (tx.status) {
+                                "VERIFIED" -> GamingSuccessGreen
+                                "REJECTED" -> GamingErrorRed
+                                else -> GamingPrimaryGold
+                            }
+
+                            Surface(
+                                color = badgeColor.copy(alpha = 0.2f),
+                                shape = RoundedCornerShape(8.dp)
                             ) {
-                                Column {
-                                    Text("TxID: ${tx.transactionId}", fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 13.sp)
-                                    Text("bKash 01789495251", color = TextSecondary, fontSize = 11.sp)
-                                }
-                                Column(horizontalAlignment = Alignment.End) {
-                                    Text("৳ ${tx.amount.toInt()} BDT", fontWeight = FontWeight.Bold, color = SuccessGreen, fontSize = 14.sp)
-                                    Surface(
-                                        color = when (tx.status) {
-                                            "APPROVED" -> SuccessGreen.copy(alpha = 0.2f)
-                                            "REJECTED" -> ErrorRed.copy(alpha = 0.2f)
-                                            else -> GoldAccent.copy(alpha = 0.2f)
-                                        },
-                                        shape = RoundedCornerShape(6.dp)
-                                    ) {
-                                        Text(
-                                            text = tx.status,
-                                            color = when (tx.status) {
-                                                "APPROVED" -> SuccessGreen
-                                                "REJECTED" -> ErrorRed
-                                                else -> GoldAccent
-                                            },
-                                            fontWeight = FontWeight.Bold,
-                                            fontSize = 10.sp,
-                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                        )
-                                    }
-                                }
+                                Text(
+                                    text = tx.status,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = badgeColor,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
                             }
                         }
                     }
@@ -309,4 +313,3 @@ fun WalletScreen(
         }
     }
 }
-

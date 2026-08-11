@@ -1,310 +1,310 @@
 package com.example.ui.screens
 
-import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.*
+import com.example.data.db.DeviceLogEntity
+import com.example.data.db.TournamentEntity
+import com.example.data.db.WalletTransactionEntity
 import com.example.ui.theme.*
+import com.example.ui.viewmodel.MainViewModel
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AdminPanelScreen(
-    pendingTransactions: List<WalletTransactionEntity>,
-    allUsers: List<UserEntity>,
-    allTournaments: List<TournamentEntity>,
-    noticeTitle: String,
-    noticeContent: String,
-    noticeTargetEmail: String,
-    statusFeedback: String?,
-    onNoticeTitleChange: (String) -> Unit,
-    onNoticeContentChange: (String) -> Unit,
-    onNoticeTargetChange: (String) -> Unit,
-    onApproveTx: (Int) -> Unit,
-    onRejectTx: (Int) -> Unit,
-    onPublishNotice: () -> Unit,
-    onUpdateRoomDetails: (tournamentId: Int, roomId: String, roomPass: String) -> Unit,
-    onClearFeedback: () -> Unit,
-    onNavigateBack: () -> Unit
+    viewModel: MainViewModel,
+    allTransactions: List<WalletTransactionEntity>,
+    tournaments: List<TournamentEntity>,
+    allDeviceLogs: List<DeviceLogEntity>
 ) {
-    var selectedTab by remember { mutableStateOf(0) } // 0: TxIDs, 1: Room IDs, 2: Notices, 3: User Telemetry
+    // Notice broadcast form inputs
+    var noticeTitle by remember { mutableStateOf("") }
+    var noticeContent by remember { mutableStateOf("") }
 
-    FrostedGlassBackground {
-        Scaffold(
-            topBar = {
-                Surface(
-                    color = Color(0x14FFFFFF),
-                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x1AFFFFFF))
-                ) {
-                    TopAppBar(
-                        title = { Text("👑 ADMIN CONTROL PANEL", fontWeight = FontWeight.Black, fontSize = 15.sp, color = GoldAccent, letterSpacing = 1.sp) },
-                        navigationIcon = {
-                            IconButton(onClick = onNavigateBack) {
-                                Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = TextPrimary)
+    // Room ID & Password distributor inputs
+    var selectedTournamentId by remember { mutableStateOf(tournaments.firstOrNull()?.id ?: "") }
+    var inputRoomId by remember { mutableStateOf("") }
+    var inputRoomPass by remember { mutableStateOf("") }
+
+    // Pinned Banner Image URL input
+    var bannerImageUrl by remember { mutableStateOf("https://images.unsplash.com/photo-1542751371-adc38448a05e?w=800") }
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp),
+        contentPadding = PaddingValues(bottom = 30.dp)
+    ) {
+        item {
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.AdminPanelSettings, contentDescription = "Admin", tint = GamingAccentPink, modifier = Modifier.size(28.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "ADMIN VERIFICATION PANEL",
+                    fontWeight = FontWeight.Black,
+                    fontSize = 20.sp,
+                    color = GamingAccentPink,
+                    letterSpacing = 1.sp
+                )
+            }
+            Text(
+                text = "Verify bKash recharges, publish notices, set room IDs, and inspect device logs.",
+                fontSize = 12.sp,
+                color = GamingTextSecondary
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+        }
+
+        // Section 1: Pending bKash Transaction Verification
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = GamingCardSurface),
+                shape = RoundedCornerShape(24.dp),
+                border = BorderStroke(1.dp, GamingGlassBorder),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Payments, contentDescription = "Payments", tint = GamingBkashPink)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "bKash Recharge Verifications",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            color = GamingPrimaryGold
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    val pendingTxs = allTransactions.filter { it.status == "PENDING" }
+                    if (pendingTxs.isEmpty()) {
+                        Text("No pending recharge requests awaiting verification.", fontSize = 12.sp, color = GamingTextSecondary)
+                    } else {
+                        pendingTxs.forEach { tx ->
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = GamingSurface),
+                                shape = RoundedCornerShape(16.dp),
+                                border = BorderStroke(1.dp, GamingGlassBorder),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 4.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text("User: ${tx.userEmail}", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = GamingAccentCyan)
+                                    Text("TxID: ${tx.transactionId} | Amount: ৳${tx.amount.toInt()}", fontWeight = FontWeight.Black, fontSize = 14.sp, color = GamingPrimaryGold)
+
+                                    Spacer(modifier = Modifier.height(8.dp))
+
+                                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Button(
+                                            onClick = { viewModel.adminApproveTransaction(tx.id, true) },
+                                            colors = ButtonDefaults.buttonColors(containerColor = GamingSuccessGreen),
+                                            shape = RoundedCornerShape(10.dp),
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .testTag("admin_approve_${tx.id}")
+                                        ) {
+                                            Text("APPROVE & CREDIT", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.White)
+                                        }
+
+                                        Button(
+                                            onClick = { viewModel.adminApproveTransaction(tx.id, false) },
+                                            colors = ButtonDefaults.buttonColors(containerColor = GamingErrorRed),
+                                            shape = RoundedCornerShape(10.dp),
+                                            modifier = Modifier
+                                                .weight(1f)
+                                                .testTag("admin_reject_${tx.id}")
+                                        ) {
+                                            Text("REJECT", fontWeight = FontWeight.Bold, fontSize = 11.sp, color = Color.White)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(20.dp))
+        }
+
+        // Section 2: Distribute Tournament Room ID & Password
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = GamingCardSurface),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Text("Distribute Custom Room ID & Pass", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = GamingPrimaryGold)
+                    Text("Credentials will instantly appear on joined players' private Tournament Info page.", fontSize = 11.sp, color = GamingTextSecondary)
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (tournaments.isNotEmpty()) {
+                        Text("Select Tournament:", fontSize = 11.sp, color = GamingTextSecondary)
+                        LazyRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            items(tournaments) { tourney ->
+                                FilterChip(
+                                    selected = selectedTournamentId == tourney.id,
+                                    onClick = { selectedTournamentId = tourney.id },
+                                    label = { Text(tourney.id) }
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedTextField(
+                            value = inputRoomId,
+                            onValueChange = { inputRoomId = it },
+                            label = { Text("Room ID") },
+                            modifier = Modifier.weight(1f).testTag("input_admin_room_id")
+                        )
+                        OutlinedTextField(
+                            value = inputRoomPass,
+                            onValueChange = { inputRoomPass = it },
+                            label = { Text("Room Password") },
+                            modifier = Modifier.weight(1f).testTag("input_admin_room_pass")
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Button(
+                        onClick = {
+                            if (selectedTournamentId.isNotEmpty() && inputRoomId.isNotEmpty()) {
+                                viewModel.adminUpdateRoomInfo(selectedTournamentId, inputRoomId, inputRoomPass)
+                                inputRoomId = ""
+                                inputRoomPass = ""
                             }
                         },
-                        colors = TopAppBarDefaults.topAppBarColors(
-                            containerColor = Color.Transparent,
-                            titleContentColor = TextPrimary
-                        )
-                    )
-                }
-            },
-            containerColor = Color.Transparent
-        ) { paddingValues ->
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .padding(16.dp)
-            ) {
-                // Tabs Row (Frosted)
-                TabRow(
-                    selectedTabIndex = selectedTab,
-                    containerColor = Color(0x1AFFFFFF),
-                    contentColor = GoldAccent
-                ) {
-                    Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }) {
-                        Text("bKash (${pendingTransactions.size})", fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(10.dp), color = if (selectedTab == 0) GoldAccent else TextSecondary)
-                    }
-                    Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }) {
-                        Text("Room IDs", fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(10.dp), color = if (selectedTab == 1) GoldAccent else TextSecondary)
-                    }
-                    Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }) {
-                        Text("Notices", fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(10.dp), color = if (selectedTab == 2) GoldAccent else TextSecondary)
-                    }
-                    Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }) {
-                        Text("Telemetry", fontSize = 11.sp, fontWeight = FontWeight.Bold, modifier = Modifier.padding(10.dp), color = if (selectedTab == 3) GoldAccent else TextSecondary)
-                    }
-                }
-
-                if (statusFeedback != null) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Surface(
-                        color = SuccessGreen.copy(alpha = 0.2f),
-                        border = androidx.compose.foundation.BorderStroke(1.dp, SuccessGreen),
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
+                        colors = ButtonDefaults.buttonColors(containerColor = GamingPrimaryGold),
+                        modifier = Modifier.fillMaxWidth().testTag("admin_publish_room_btn")
                     ) {
-                        Row(
-                            modifier = Modifier.padding(10.dp),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(statusFeedback, color = SuccessGreen, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                            IconButton(onClick = onClearFeedback, modifier = Modifier.size(20.dp)) {
-                                Icon(Icons.Default.Close, contentDescription = "Close", tint = SuccessGreen)
-                            }
-                        }
+                        Text("RELEASE ROOM CREDENTIALS", fontWeight = FontWeight.Bold, color = GamingDarkBackground)
                     }
                 }
+            }
+            Spacer(modifier = Modifier.height(20.dp))
+        }
 
-                Spacer(modifier = Modifier.height(12.dp))
+        // Section 3: Pin Banner Image / Broadcast Notice
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = GamingCardSurface),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Text("Pin Home Banner Image", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = GamingPrimaryGold)
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                when (selectedTab) {
-                    0 -> {
-                        // bKash TxID Verification Queue
-                        if (pendingTransactions.isEmpty()) {
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                Text("No pending bKash deposit requests.", color = TextSecondary, fontSize = 13.sp)
-                            }
-                        } else {
-                            LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                                items(pendingTransactions) { tx ->
-                                    Card(
-                                        modifier = Modifier.fillMaxWidth(),
-                                        colors = CardDefaults.cardColors(containerColor = Color(0x1AFFFFFF)),
-                                        shape = RoundedCornerShape(16.dp),
-                                        border = androidx.compose.foundation.BorderStroke(1.dp, GoldAccent)
-                                    ) {
-                                        Column(modifier = Modifier.padding(14.dp)) {
-                                            Text("User: ${tx.userEmail}", fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 13.sp)
-                                            Text("TxID: ${tx.transactionId}", color = GoldAccent, fontWeight = FontWeight.Black, fontSize = 16.sp)
-                                            Text("Amount: ৳ ${tx.amount.toInt()} BDT", color = SuccessGreen, fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                                            Spacer(modifier = Modifier.height(10.dp))
-                                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                                Button(
-                                                    onClick = { onApproveTx(tx.id) },
-                                                    colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen),
-                                                    modifier = Modifier.weight(1f),
-                                                    shape = RoundedCornerShape(12.dp)
-                                                ) {
-                                                    Text("APPROVE & CREDIT", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                                                }
-                                                Button(
-                                                    onClick = { onRejectTx(tx.id) },
-                                                    colors = ButtonDefaults.buttonColors(containerColor = ErrorRed),
-                                                    modifier = Modifier.weight(1f),
-                                                    shape = RoundedCornerShape(12.dp)
-                                                ) {
-                                                    Text("REJECT", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    1 -> {
-                        // Room ID & Password Distributor
-                        LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                            items(allTournaments) { t ->
-                                var roomIdState by remember(t.id) { mutableStateOf(t.roomId) }
-                                var roomPassState by remember(t.id) { mutableStateOf(t.roomPassword) }
+                    OutlinedTextField(
+                        value = bannerImageUrl,
+                        onValueChange = { bannerImageUrl = it },
+                        label = { Text("Banner Image URL") },
+                        modifier = Modifier.fillMaxWidth().testTag("input_admin_banner_url")
+                    )
 
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = CardDefaults.cardColors(containerColor = Color(0x1AFFFFFF)),
-                                    shape = RoundedCornerShape(16.dp),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x2EFFFFFF))
-                                ) {
-                                    Column(modifier = Modifier.padding(14.dp)) {
-                                        Text(t.title, fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 14.sp)
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                                            OutlinedTextField(
-                                                value = roomIdState,
-                                                onValueChange = { roomIdState = it },
-                                                label = { Text("Room ID", color = TextSecondary) },
-                                                modifier = Modifier.weight(1f),
-                                                singleLine = true,
-                                                colors = OutlinedTextFieldDefaults.colors(
-                                                    focusedBorderColor = PurplePrimary,
-                                                    unfocusedBorderColor = Color(0x2BFFFFFF)
-                                                ),
-                                                shape = RoundedCornerShape(12.dp)
-                                            )
-                                            OutlinedTextField(
-                                                value = roomPassState,
-                                                onValueChange = { roomPassState = it },
-                                                label = { Text("Password", color = TextSecondary) },
-                                                modifier = Modifier.weight(1f),
-                                                singleLine = true,
-                                                colors = OutlinedTextFieldDefaults.colors(
-                                                    focusedBorderColor = PurplePrimary,
-                                                    unfocusedBorderColor = Color(0x2BFFFFFF)
-                                                ),
-                                                shape = RoundedCornerShape(12.dp)
-                                            )
-                                        }
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        Button(
-                                            onClick = { onUpdateRoomDetails(t.id, roomIdState, roomPassState) },
-                                            colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                                            contentPadding = PaddingValues(),
-                                            modifier = Modifier.fillMaxWidth()
-                                        ) {
-                                            Box(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .background(
-                                                        Brush.horizontalGradient(listOf(PurplePrimary, IndigoAccent)),
-                                                        shape = RoundedCornerShape(12.dp)
-                                                    )
-                                                    .padding(vertical = 12.dp),
-                                                contentAlignment = Alignment.Center
-                                            ) {
-                                                Text("PUBLISH ROOM DETAILS TO PARTICIPANTS", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 11.sp)
-                                            }
-                                        }
-                                    }
-                                }
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Button(
+                        onClick = {
+                            if (selectedTournamentId.isNotEmpty()) {
+                                viewModel.adminPinTournamentImage(selectedTournamentId, bannerImageUrl)
                             }
-                        }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = GamingAccentCyan),
+                        modifier = Modifier.fillMaxWidth().testTag("admin_pin_banner_btn")
+                    ) {
+                        Text("PIN BANNER TO HOME SCREEN", fontWeight = FontWeight.Bold, color = GamingDarkBackground)
                     }
-                    2 -> {
-                        // Notice Publisher
-                        Card(
-                            modifier = Modifier.fillMaxWidth(),
-                            colors = CardDefaults.cardColors(containerColor = Color(0x1AFFFFFF)),
-                            shape = RoundedCornerShape(16.dp),
-                            border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x2EFFFFFF))
-                        ) {
-                            Column(modifier = Modifier.padding(14.dp)) {
-                                Text("PUBLISH NOTICE TO PLAYERS", fontWeight = FontWeight.Bold, color = GoldAccent, fontSize = 14.sp)
-                                Spacer(modifier = Modifier.height(10.dp))
-                                OutlinedTextField(
-                                    value = noticeTitle,
-                                    onValueChange = onNoticeTitleChange,
-                                    label = { Text("Notice Title", color = TextSecondary) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true,
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedBorderColor = PurplePrimary,
-                                        unfocusedBorderColor = Color(0x2BFFFFFF)
-                                    ),
-                                    shape = RoundedCornerShape(12.dp)
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                OutlinedTextField(
-                                    value = noticeContent,
-                                    onValueChange = onNoticeContentChange,
-                                    label = { Text("Notice Content", color = TextSecondary) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedBorderColor = PurplePrimary,
-                                        unfocusedBorderColor = Color(0x2BFFFFFF)
-                                    ),
-                                    shape = RoundedCornerShape(12.dp)
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                                OutlinedTextField(
-                                    value = noticeTargetEmail,
-                                    onValueChange = onNoticeTargetChange,
-                                    label = { Text("Target Email ('ALL' or specific email)", color = TextSecondary) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    singleLine = true,
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        focusedBorderColor = PurplePrimary,
-                                        unfocusedBorderColor = Color(0x2BFFFFFF)
-                                    ),
-                                    shape = RoundedCornerShape(12.dp)
-                                )
-                                Spacer(modifier = Modifier.height(12.dp))
-                                Button(
-                                    onClick = onPublishNotice,
-                                    colors = ButtonDefaults.buttonColors(containerColor = GoldAccent),
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(12.dp)
-                                ) {
-                                    Text("PUBLISH NOTICE", color = Color.Black, fontWeight = FontWeight.Bold)
-                                }
+
+                    Spacer(modifier = Modifier.height(18.dp))
+                    Divider(color = GamingSurface)
+                    Spacer(modifier = Modifier.height(14.dp))
+
+                    Text("Publish Platform Notice", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = GamingPrimaryGold)
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = noticeTitle,
+                        onValueChange = { noticeTitle = it },
+                        label = { Text("Notice Title") },
+                        modifier = Modifier.fillMaxWidth().testTag("input_notice_title")
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    OutlinedTextField(
+                        value = noticeContent,
+                        onValueChange = { noticeContent = it },
+                        label = { Text("Notice Description") },
+                        modifier = Modifier.fillMaxWidth().testTag("input_notice_content")
+                    )
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Button(
+                        onClick = {
+                            if (noticeTitle.isNotEmpty()) {
+                                viewModel.adminPostNotice(noticeTitle, noticeContent, isLoginScreen = true)
+                                noticeTitle = ""
+                                noticeContent = ""
                             }
-                        }
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = GamingAccentPink),
+                        modifier = Modifier.fillMaxWidth().testTag("admin_publish_notice_btn")
+                    ) {
+                        Text("BROADCAST GLOBAL NOTICE", fontWeight = FontWeight.Bold, color = Color.White)
                     }
-                    3 -> {
-                        // Logged User Device Telemetry Viewer
-                        LazyColumn(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                            items(allUsers) { u ->
-                                Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = CardDefaults.cardColors(containerColor = Color(0x1AFFFFFF)),
-                                    shape = RoundedCornerShape(14.dp),
-                                    border = androidx.compose.foundation.BorderStroke(1.dp, Color(0x20FFFFFF))
-                                ) {
-                                    Column(modifier = Modifier.padding(12.dp)) {
-                                        Text("${u.name} (${u.email})", fontWeight = FontWeight.Bold, color = TextPrimary, fontSize = 13.sp)
-                                        Text("FF UID: ${u.ffUid}", color = GoldAccent, fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                                        Spacer(modifier = Modifier.height(4.dp))
-                                        Text("📱 Model: ${u.deviceModel.ifBlank { "Unknown Android" }}", fontSize = 11.sp, color = TextSecondary)
-                                        Text("🔋 Battery: ${u.batteryLevel.ifBlank { "N/A" }}", fontSize = 11.sp, color = TextSecondary)
-                                        Text("🌐 Network: ${u.networkType.ifBlank { "Online" }}", fontSize = 11.sp, color = TextSecondary)
-                                        Text("📡 IP Address: ${u.ipAddress.ifBlank { "192.168.1.1" }}", fontSize = 11.sp, color = TextSecondary)
-                                    }
+                }
+            }
+            Spacer(modifier = Modifier.height(20.dp))
+        }
+
+        // Section 4: Device Logs Monitor View
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = GamingSurface),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Text("User Device Logs Monitor", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = GamingAccentCyan)
+                    Text("Track active user devices, IP addresses, battery level, and network details.", fontSize = 11.sp, color = GamingTextSecondary)
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    if (allDeviceLogs.isEmpty()) {
+                        Text("No device logs recorded yet.", fontSize = 12.sp, color = GamingTextSecondary)
+                    } else {
+                        allDeviceLogs.forEach { log ->
+                            Surface(
+                                color = GamingCardSurface,
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)
+                            ) {
+                                Column(modifier = Modifier.padding(10.dp)) {
+                                    Text("User: ${log.userEmail}", fontWeight = FontWeight.Bold, fontSize = 12.sp, color = GamingPrimaryGold)
+                                    Text("Model: ${log.model} | Battery: ${log.batteryLevel}%", fontSize = 11.sp, color = GamingTextPrimary)
+                                    Text("Network: ${log.networkType} | IP: ${log.ipAddress}", fontSize = 11.sp, color = GamingTextSecondary)
                                 }
                             }
                         }
@@ -314,4 +314,3 @@ fun AdminPanelScreen(
         }
     }
 }
-

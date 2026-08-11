@@ -1,309 +1,459 @@
 package com.example.ui.screens
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.data.RegistrationEntity
-import com.example.data.TournamentEntity
+import com.example.data.db.ChatMessageEntity
+import com.example.data.db.TournamentEntity
+import com.example.data.db.UserEntity
+import com.example.ui.components.copyToClipboard
 import com.example.ui.theme.*
+import com.example.ui.viewmodel.MainViewModel
+import com.example.ui.viewmodel.Screen
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun TournamentRegistrationDialog(
-    tournament: TournamentEntity,
-    userEmail: String,
-    initialFfUid: String = "",
-    initialWhatsapp: String = "",
-    onDismiss: () -> Unit,
-    onSubmitRegistration: (
-        ffUid: String,
-        firstName: String,
-        lastName: String,
-        squadName: String,
-        player1: String,
-        player2: String,
-        player3: String,
-        player4: String,
-        whatsapp: String
-    ) -> Unit
+fun TournamentDetailScreen(
+    tournamentId: String,
+    viewModel: MainViewModel,
+    currentUser: UserEntity?
 ) {
-    var ffUid by remember { mutableStateOf(initialFfUid) }
-    var firstName by remember { mutableStateOf("") }
-    var lastName by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    val tournament by viewModel.repository.getTournamentFlow(tournamentId)
+        .collectAsState(initial = null)
+
+    val registrations by viewModel.userRegistrations.collectAsState()
+    val isRegistered = remember(registrations, tournamentId) {
+        registrations.any { it.tournamentId == tournamentId }
+    }
+
+    // Chat messages specific to this tournament
+    val chatMessages by viewModel.repository.getChatMessagesFlow("TOURNAMENT_$tournamentId")
+        .collectAsState(initial = emptyList())
+
+    // Form states
+    var ffUid by remember(currentUser) { mutableStateOf(currentUser?.ffUid ?: "") }
+    var firstName by remember(currentUser) { mutableStateOf(currentUser?.firstName ?: "") }
+    var lastName by remember(currentUser) { mutableStateOf(currentUser?.lastName ?: "") }
     var squadName by remember { mutableStateOf("") }
-    var player1 by remember { mutableStateOf("") }
-    var player2 by remember { mutableStateOf("") }
-    var player3 by remember { mutableStateOf("") }
-    var player4 by remember { mutableStateOf("") }
-    var whatsapp by remember { mutableStateOf(initialWhatsapp) }
+    var p1Username by remember { mutableStateOf("") }
+    var p2Username by remember { mutableStateOf("") }
+    var p3Username by remember { mutableStateOf("") }
+    var p4Username by remember { mutableStateOf("") }
+    var whatsapp by remember(currentUser) { mutableStateOf(currentUser?.whatsapp ?: "") }
 
-    val isSquad = tournament.gameMode.equals("SQUAD", ignoreCase = true)
+    var chatMessageInput by remember { mutableStateOf("") }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            Button(
-                onClick = {
-                    onSubmitRegistration(
-                        ffUid, firstName, lastName, squadName,
-                        player1, player2, player3, player4, whatsapp
-                    )
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = Color.Transparent),
-                contentPadding = PaddingValues(),
-                enabled = ffUid.isNotBlank() && firstName.isNotBlank() && (!isSquad || squadName.isNotBlank())
+    if (tournament == null) {
+        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator(color = GamingPrimaryGold)
+        }
+        return
+    }
+
+    val t = tournament!!
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(horizontal = 16.dp),
+        contentPadding = PaddingValues(bottom = 30.dp)
+    ) {
+        item {
+            Spacer(modifier = Modifier.height(12.dp))
+            // Back Button Bar
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Box(
-                    modifier = Modifier
-                        .background(
-                            Brush.horizontalGradient(listOf(PurplePrimary, IndigoAccent)),
-                            shape = RoundedCornerShape(12.dp)
-                        )
-                        .padding(horizontal = 16.dp, vertical = 10.dp)
+                IconButton(
+                    onClick = { viewModel.navigateTo(Screen.Home) },
+                    modifier = Modifier.testTag("tournament_back_btn")
                 ) {
-                    Text("CONFIRM & PAY (৳ ${tournament.entryFee.toInt()} BDT)", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                    Icon(
+                        imageVector = Icons.Default.ArrowBack,
+                        contentDescription = "Back to Home",
+                        tint = GamingPrimaryGold
+                    )
                 }
+                Text(
+                    text = t.title,
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    color = GamingTextPrimary,
+                    modifier = Modifier.weight(1f)
+                )
             }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel", color = TextSecondary)
-            }
-        },
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.AppRegistration, contentDescription = null, tint = PurplePrimary)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("TOURNAMENT REGISTRATION", fontSize = 14.sp, fontWeight = FontWeight.Black, color = TextPrimary, letterSpacing = 1.sp)
-            }
-        },
-        text = {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(10.dp)
+            Spacer(modifier = Modifier.height(12.dp))
+        }
+
+        // Tournament Summary Card
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = GamingCardSurface),
+                shape = RoundedCornerShape(24.dp),
+                border = BorderStroke(1.dp, GamingGlassBorder),
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    text = "Event: ${tournament.title}",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = GoldAccent
-                )
+                Column(modifier = Modifier.padding(18.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Surface(
+                            color = GamingPrimaryGold,
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Text(
+                                text = "${t.gameMode.uppercase()} • MAP: ${t.map.uppercase()}",
+                                fontWeight = FontWeight.Black,
+                                fontSize = 11.sp,
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
 
-                // Mandatory FF UID
-                OutlinedTextField(
-                    value = ffUid,
-                    onValueChange = { ffUid = it },
-                    label = { Text("Free Fire Player UID *", color = TextSecondary) },
-                    singleLine = true,
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = PurplePrimary,
-                        unfocusedBorderColor = Color(0x2BFFFFFF),
-                        focusedLabelColor = PurplePrimary
-                    ),
-                    shape = RoundedCornerShape(12.dp)
-                )
+                        Text(
+                            text = t.scheduleTime,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            color = GamingAccentCyan
+                        )
+                    }
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = firstName,
-                        onValueChange = { firstName = it },
-                        label = { Text("First Name *", color = TextSecondary) },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = PurplePrimary,
-                            unfocusedBorderColor = Color(0x2BFFFFFF)
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    OutlinedTextField(
-                        value = lastName,
-                        onValueChange = { lastName = it },
-                        label = { Text("Last Name", color = TextSecondary) },
-                        modifier = Modifier.weight(1f),
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = PurplePrimary,
-                            unfocusedBorderColor = Color(0x2BFFFFFF)
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(GamingSurface)
+                            .border(1.dp, GamingGlassBorder, RoundedCornerShape(16.dp))
+                            .padding(12.dp),
+                        horizontalArrangement = Arrangement.SpaceAround
+                    ) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("PRIZE POOL", fontSize = 10.sp, color = GamingTextSecondary)
+                            Text("৳${t.prizePool.toInt()}", fontWeight = FontWeight.Black, fontSize = 16.sp, color = GamingSuccessGreen)
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("PER KILL", fontSize = 10.sp, color = GamingTextSecondary)
+                            Text("৳${t.perKill.toInt()}", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = GamingAccentCyan)
+                        }
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("ENTRY FEE", fontSize = 10.sp, color = GamingTextSecondary)
+                            Text("৳${t.entryFee.toInt()}", fontWeight = FontWeight.Black, fontSize = 16.sp, color = GamingPrimaryGold)
+                        }
+                    }
                 }
+            }
+            Spacer(modifier = Modifier.height(16.dp))
+        }
 
-                if (isSquad) {
-                    HorizontalDivider(color = Color(0x20FFFFFF), modifier = Modifier.padding(vertical = 4.dp))
-                    Text("SQUAD / TEAM DETAILS", fontSize = 11.sp, fontWeight = FontWeight.Bold, color = GoldAccent)
+        // Private Tournament Info Section (If Registered)
+        if (isRegistered) {
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = GamingSurface),
+                    shape = RoundedCornerShape(20.dp),
+                    border = androidx.compose.foundation.BorderStroke(1.dp, GamingSuccessGreen),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(18.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.VpnKey, contentDescription = "Room Key", tint = GamingSuccessGreen)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "PRIVATE TOURNAMENT INFO",
+                                fontWeight = FontWeight.Black,
+                                fontSize = 16.sp,
+                                color = GamingSuccessGreen
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = "Visible only to registered tournament participants.",
+                            fontSize = 11.sp,
+                            color = GamingTextSecondary
+                        )
 
-                    OutlinedTextField(
-                        value = squadName,
-                        onValueChange = { squadName = it },
-                        label = { Text("Squad Name *", color = TextSecondary) },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(
-                            focusedBorderColor = GoldAccent,
-                            unfocusedBorderColor = Color(0x2BFFFFFF)
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    )
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                    OutlinedTextField(
-                        value = player1,
-                        onValueChange = { player1 = it },
-                        label = { Text("Player 1 Username (Captain)", color = TextSecondary) },
-                        singleLine = true,
-                        colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = PurplePrimary),
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    OutlinedTextField(
-                        value = player2,
-                        onValueChange = { player2 = it },
-                        label = { Text("Player 2 Username", color = TextSecondary) },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    OutlinedTextField(
-                        value = player3,
-                        onValueChange = { player3 = it },
-                        label = { Text("Player 3 Username", color = TextSecondary) },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
-                    )
-                    OutlinedTextField(
-                        value = player4,
-                        onValueChange = { player4 = it },
-                        label = { Text("Player 4 Username", color = TextSecondary) },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp)
-                    )
+                        // Room ID & Room Password Card
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            // Room ID
+                            Surface(
+                                color = GamingCardSurface,
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text("ROOM ID", fontSize = 10.sp, color = GamingTextSecondary)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = t.roomId,
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 18.sp,
+                                        color = GamingPrimaryGold
+                                    )
+                                    if (t.roomId != "TBA") {
+                                        TextButton(
+                                            onClick = { copyToClipboard(context, "Room ID", t.roomId) },
+                                            contentPadding = PaddingValues(0.dp)
+                                        ) {
+                                            Text("COPY ID", fontSize = 11.sp, color = GamingAccentCyan)
+                                        }
+                                    }
+                                }
+                            }
+
+                            // Room Password
+                            Surface(
+                                color = GamingCardSurface,
+                                shape = RoundedCornerShape(14.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text("ROOM PASSWORD", fontSize = 10.sp, color = GamingTextSecondary)
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = t.roomPassword,
+                                        fontWeight = FontWeight.Black,
+                                        fontSize = 18.sp,
+                                        color = GamingPrimaryGold
+                                    )
+                                    if (t.roomPassword != "TBA") {
+                                        TextButton(
+                                            onClick = { copyToClipboard(context, "Room Pass", t.roomPassword) },
+                                            contentPadding = PaddingValues(0.dp)
+                                        ) {
+                                            Text("COPY PASS", fontSize = 11.sp, color = GamingAccentCyan)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(14.dp))
+                        Text("Tournament Rules:", fontWeight = FontWeight.Bold, fontSize = 13.sp, color = GamingTextPrimary)
+                        Text("1. Hacking, emulator bypass, or bug exploitation results in immediate ban.", fontSize = 12.sp, color = GamingTextSecondary)
+                        Text("2. Join custom room 5 minutes before match schedule.", fontSize = 12.sp, color = GamingTextSecondary)
+                        Text("3. Take screenshot of your match result for prize claim.", fontSize = 12.sp, color = GamingTextSecondary)
+                    }
                 }
-
-                OutlinedTextField(
-                    value = whatsapp,
-                    onValueChange = { whatsapp = it },
-                    label = { Text("WhatsApp Contact (Optional)", color = TextSecondary) },
-                    singleLine = true,
-                    shape = RoundedCornerShape(12.dp)
-                )
+                Spacer(modifier = Modifier.height(20.dp))
             }
-        },
-        containerColor = Color(0xFF1E1B2E),
-        shape = RoundedCornerShape(20.dp)
-    )
-}
 
-@Composable
-fun InsufficientCreditDialog(
-    requiredAmount: Double,
-    currentBalance: Double,
-    onDismiss: () -> Unit,
-    onRechargeClick: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.Warning, contentDescription = null, tint = ErrorRed)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("INSUFFICIENT BALANCE", fontWeight = FontWeight.Black, color = TextPrimary, fontSize = 15.sp)
-            }
-        },
-        text = {
-            Column {
+            // Dedicated Tournament Live Chat with Admin
+            item {
                 Text(
-                    text = "Not enough credit. Wanna recharge?",
+                    text = "TOURNAMENT PARTICIPANT CHAT WITH ADMIN",
                     fontWeight = FontWeight.Bold,
-                    fontSize = 15.sp,
-                    color = GoldAccent
+                    fontSize = 14.sp,
+                    color = GamingPrimaryGold,
+                    letterSpacing = 0.8.sp
                 )
                 Spacer(modifier = Modifier.height(8.dp))
-                Text("Current Balance: ৳ ${String.format("%.1f", currentBalance)} BDT", color = TextSecondary, fontSize = 13.sp)
-                Text("Entry Fee Required: ৳ ${requiredAmount.toInt()} BDT", color = ErrorRed, fontSize = 13.sp, fontWeight = FontWeight.Bold)
             }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    onDismiss()
-                    onRechargeClick()
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = BkashPink),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(Icons.Default.AccountBalanceWallet, contentDescription = null, tint = Color.White)
-                Spacer(modifier = Modifier.width(6.dp))
-                Text("RECHARGE VIA BKASH", color = Color.White, fontWeight = FontWeight.Bold)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Cancel", color = TextSecondary)
-            }
-        },
-        containerColor = Color(0xFF1E1B2E),
-        shape = RoundedCornerShape(20.dp)
-    )
-}
 
-@Composable
-fun RegistrationTicketDialog(
-    registration: RegistrationEntity,
-    onDismiss: () -> Unit,
-    onViewPrivateRoom: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Icons.Default.ConfirmationNumber, contentDescription = null, tint = SuccessGreen)
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("REGISTRATION CONFIRMED! 🎟️", fontWeight = FontWeight.Black, color = SuccessGreen, fontSize = 15.sp)
-            }
-        },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("Registration ID: #REG-${registration.id}", fontWeight = FontWeight.Bold, color = TextPrimary)
-                Text("FF UID: ${registration.ffUid}", color = PurplePrimary, fontWeight = FontWeight.Medium)
-                if (registration.squadName.isNotBlank()) {
-                    Text("Squad: ${registration.squadName}", color = GoldAccent, fontWeight = FontWeight.Medium)
+            items(chatMessages) { msg ->
+                val isMe = msg.senderEmail == currentUser?.email
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                    horizontalArrangement = if (isMe) Arrangement.End else Arrangement.Start
+                ) {
+                    Surface(
+                        color = if (msg.isAdmin) GamingAccentPink.copy(alpha = 0.85f) else if (isMe) GamingPrimaryGold else GamingCardSurface,
+                        shape = RoundedCornerShape(14.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text(
+                                text = if (msg.isAdmin) "👑 Admin Support" else msg.senderName,
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (isMe || msg.isAdmin) GamingDarkBackground else GamingAccentCyan
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = msg.message,
+                                fontSize = 13.sp,
+                                color = if (isMe || msg.isAdmin) GamingDarkBackground else GamingTextPrimary
+                            )
+                        }
+                    }
                 }
-                Spacer(modifier = Modifier.height(4.dp))
-                Text("You now have access to the Private Tournament Info page for Room ID & Password!", color = TextSecondary, fontSize = 12.sp)
             }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    onDismiss()
-                    onViewPrivateRoom()
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = SuccessGreen),
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("OPEN ROOM INFO", color = Color.White, fontWeight = FontWeight.Bold)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Close", color = TextSecondary)
-            }
-        },
-        containerColor = Color(0xFF1E1B2E),
-        shape = RoundedCornerShape(20.dp)
-    )
-}
 
+            item {
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    OutlinedTextField(
+                        value = chatMessageInput,
+                        onValueChange = { chatMessageInput = it },
+                        placeholder = { Text("Message Admin regarding match...") },
+                        modifier = Modifier.weight(1f).testTag("tournament_chat_input")
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    IconButton(
+                        onClick = {
+                            if (chatMessageInput.isNotEmpty()) {
+                                viewModel.sendChatMessage("TOURNAMENT_$tournamentId", chatMessageInput)
+                                chatMessageInput = ""
+                            }
+                        },
+                        modifier = Modifier.testTag("tournament_chat_send_btn")
+                    ) {
+                        Icon(Icons.Default.Send, contentDescription = "Send", tint = GamingPrimaryGold)
+                    }
+                }
+                Spacer(modifier = Modifier.height(20.dp))
+            }
+        } else {
+            // Registration Requirement Form (If NOT registered)
+            item {
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = GamingCardSurface),
+                    shape = RoundedCornerShape(20.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(18.dp)) {
+                        Text(
+                            text = "Automated Tournament Registration",
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 18.sp,
+                            color = GamingPrimaryGold
+                        )
+                        Text(
+                            text = "Mandatory details for bracket entry & automated prize distribution.",
+                            fontSize = 12.sp,
+                            color = GamingTextSecondary
+                        )
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // FF UID (Mandatory)
+                        OutlinedTextField(
+                            value = ffUid,
+                            onValueChange = { ffUid = it },
+                            label = { Text("Free Fire UID (FF UID) *") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().testTag("reg_input_ff_uid")
+                        )
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // First Name & Last Name
+                        Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = firstName,
+                                onValueChange = { firstName = it },
+                                label = { Text("First Name *") },
+                                modifier = Modifier.weight(1f).testTag("reg_input_first_name")
+                            )
+                            OutlinedTextField(
+                                value = lastName,
+                                onValueChange = { lastName = it },
+                                label = { Text("Last Name *") },
+                                modifier = Modifier.weight(1f).testTag("reg_input_last_name")
+                            )
+                        }
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        // Squad Name (if Duo/Squad)
+                        if (t.gameMode.equals("Squad", true) || t.gameMode.equals("Duo", true)) {
+                            OutlinedTextField(
+                                value = squadName,
+                                onValueChange = { squadName = it },
+                                label = { Text("Squad Name *") },
+                                singleLine = true,
+                                modifier = Modifier.fillMaxWidth().testTag("reg_input_squad_name")
+                            )
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
+
+                        // 4 Player Usernames (if Squad)
+                        if (t.gameMode.equals("Squad", true)) {
+                            Text("4 Player Usernames (Squad Roster) *", fontSize = 12.sp, color = GamingAccentCyan, fontWeight = FontWeight.Bold)
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                OutlinedTextField(value = p1Username, onValueChange = { p1Username = it }, label = { Text("P1") }, modifier = Modifier.weight(1f))
+                                OutlinedTextField(value = p2Username, onValueChange = { p2Username = it }, label = { Text("P2") }, modifier = Modifier.weight(1f))
+                            }
+                            Spacer(modifier = Modifier.height(6.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                OutlinedTextField(value = p3Username, onValueChange = { p3Username = it }, label = { Text("P3") }, modifier = Modifier.weight(1f))
+                                OutlinedTextField(value = p4Username, onValueChange = { p4Username = it }, label = { Text("P4") }, modifier = Modifier.weight(1f))
+                            }
+                            Spacer(modifier = Modifier.height(10.dp))
+                        }
+
+                        // WhatsApp Number (Optional)
+                        OutlinedTextField(
+                            value = whatsapp,
+                            onValueChange = { whatsapp = it },
+                            label = { Text("WhatsApp Number (Optional)") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth().testTag("reg_input_whatsapp")
+                        )
+
+                        Spacer(modifier = Modifier.height(18.dp))
+
+                        val allPlayersJoined = if (t.gameMode.equals("Squad", true)) {
+                            listOf(p1Username, p2Username, p3Username, p4Username).joinToString(", ")
+                        } else ""
+
+                        // Join Button (Triggers Wallet Check)
+                        Button(
+                            onClick = {
+                                viewModel.registerTournament(
+                                    tournamentId = t.id,
+                                    ffUid = ffUid,
+                                    fname = firstName,
+                                    lname = lastName,
+                                    squadName = squadName,
+                                    playerUsernames = allPlayersJoined,
+                                    whatsapp = whatsapp
+                                )
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = GamingPrimaryGold),
+                            shape = RoundedCornerShape(14.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(50.dp)
+                                .testTag("submit_tournament_join_btn")
+                        ) {
+                            Text(
+                                text = "CONFIRM & DEDUCT ৳${t.entryFee.toInt()}",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 15.sp,
+                                color = Color.White
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
